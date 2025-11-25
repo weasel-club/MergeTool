@@ -233,7 +233,10 @@ public static class MeshSpace
         if (boneIndex < 0 || boneIndex >= bones.Length) return;
         if (bones[boneIndex] == null) return;
         var m = bones[boneIndex].localToWorldMatrix * bindposes[boneIndex];
-        target += m * weight;
+        for (var i = 0; i < 16; i++)
+        {
+            target[i] += m[i] * weight;
+        }
     }
 }
 
