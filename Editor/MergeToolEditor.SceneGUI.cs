@@ -249,6 +249,15 @@ public partial class MergeToolEditor : Editor
             tempCam.backgroundColor = Color.clear;
             tempCam.cullingMask = 1 << _previewLayer;
 
+            var pixelWidth = sceneView.camera.pixelWidth;
+            var pixelHeight = sceneView.camera.pixelHeight;
+
+            if (pixelWidth <= 0 || pixelHeight <= 0) return;
+
+            rt = RenderTexture.GetTemporary(pixelWidth, pixelHeight, 24, RenderTextureFormat.ARGB32);
+            rt.name = "TempPreviewRT";
+            tempCam.targetTexture = rt;
+
             var light = tempCamGO.AddComponent<Light>();
             light.type = LightType.Directional;
             light.intensity = 1f;
@@ -263,32 +272,20 @@ public partial class MergeToolEditor : Editor
                 cloneGOs.Add(cloneGO);
                 cloneGO.transform.SetPositionAndRotation(renderer.transform.position, renderer.transform.rotation);
                 cloneGO.transform.localScale = Vector3.one;
+
                 SetLayerRecursively(cloneGO, _previewLayer);
 
                 var mf = cloneGO.AddComponent<MeshFilter>();
                 mf.sharedMesh = bakedMesh;
                 var mr = cloneGO.AddComponent<MeshRenderer>();
+
                 var previewMatInstance = new Material(_previewMaterial);
                 mr.materials = new Material[] { previewMatInstance };
                 previewMaterials.Add(previewMatInstance);
 
-                var alphaVal = tuple.alpha;
-                ConfigurePreviewMaterial(previewMatInstance, alphaVal, tuple.wireframe);
+                ConfigurePreviewMaterial(previewMatInstance, tuple.alpha, tuple.wireframe);
             }
 
-            var width = sceneView.camera.pixelWidth;
-            var height = sceneView.camera.pixelHeight;
-            var logicalWidth = sceneView.camera.scaledPixelWidth;
-            var logicalHeight = sceneView.camera.scaledPixelHeight;
-            var scaleW = (float)width / logicalWidth;
-            var scaleH = (float)height / logicalHeight;
-            var scale = Mathf.Max(scaleW, scaleH);
-            width = Mathf.CeilToInt(logicalWidth * scale);
-            height = Mathf.CeilToInt(logicalHeight * scale);
-
-            rt = RenderTexture.GetTemporary(width, height, 24, RenderTextureFormat.ARGB32);
-            rt.name = "TempPreviewRT";
-            tempCam.targetTexture = rt;
             tempCam.Render();
 
             var prevMask = sceneView.camera.cullingMask;
@@ -296,11 +293,18 @@ public partial class MergeToolEditor : Editor
             try
             {
                 Handles.BeginGUI();
-                var oldColor = GUI.color;
-                GUI.color = Color.white;
-                GUIUtility.ScaleAroundPivot(new Vector2(1f / scale, 1f / scale), Vector2.zero);
-                GUI.DrawTexture(new Rect(0, 0, logicalWidth, logicalHeight), rt, ScaleMode.StretchToFill, true);
-                GUI.color = oldColor;
+
+                float ppp = EditorGUIUtility.pixelsPerPoint;
+                float logicalWidth = pixelWidth / ppp;
+                float logicalHeight = pixelHeight / ppp;
+
+                GUI.DrawTexture(
+                    new Rect(0, 0, logicalWidth, logicalHeight),
+                    rt,
+                    ScaleMode.StretchToFill,
+                    true
+                );
+
                 Handles.EndGUI();
             }
             finally
