@@ -2,7 +2,6 @@
 using UnityEngine;
 using UnityEditor;
 using System.IO;
-using System;
 
 public partial class MergeToolEditor : Editor
 {

@@ -1,7 +1,7 @@
 #if UNITY_EDITOR
-using UnityEngine;
 using System.Collections.Generic;
 using UnityEditor;
+using UnityEngine;
 
 public enum EditMode
 {
@@ -9,13 +9,14 @@ public enum EditMode
     Body,
     FaceEdge,
     BodyEdge,
-    None,
+    None
 }
 
 [CustomEditor(typeof(MergeTool))]
 public partial class MergeToolEditor : Editor
 {
     private MergeTool _target;
+
     private const float _backgroundDim = 0.85f;
     private const float _hoverSphereScale = 0.2f;
     private const int _previewLayer = 30;
@@ -23,37 +24,22 @@ public partial class MergeToolEditor : Editor
     private const float _pairSelectionScreenRadius = 18f;
 
     private Material _previewMaterial;
-
     private EditMode _editMode = EditMode.None;
-    private Vector3 _hoveredVertexPosition;
-    private int _hoveredVertexIndex = -1;
-
-    private int _hoveredEdgeV1 = -1;
-    private int _hoveredEdgeV2 = -1;
-
-    private int _selectedFaceIndex = -1;
-    private int _selectedPairIndex = -1;
-    private Vector3 _pairHandlePosition;
-    private int _pairHandleActiveIndex = -1;
-    private bool _pairHandleDragging;
     private bool _showAdvancedSettings;
 
-    private Dictionary<SkinnedMeshRenderer, Mesh> _cachedTopologyMeshes;
-    private Dictionary<SkinnedMeshRenderer, List<SplitDependency>> _splitDependencies;
-    private Dictionary<SkinnedMeshRenderer, MeshGraph> _meshGraphs;
-    private Dictionary<SkinnedMeshRenderer, Mesh> _cachedPreviewMeshes;
-    private Dictionary<SkinnedMeshRenderer, Mesh> _cachedResultMeshes;
-    private List<VertexPair> _pairBuffer = new List<VertexPair>();
-    private List<int> _pairLogIndices = new List<int>();
-    private List<int> _triangleBuffer = new List<int>();
-    private bool _pairCacheDirty = true;
+    private MeshWorkspace _faceWorkspace;
+    private MeshWorkspace _bodyWorkspace;
+    private readonly PairCache _pairCache = new PairCache();
+    private readonly SelectionState _selection = new SelectionState();
+    private readonly List<int> _triangleBuffer = new List<int>();
 
-    private bool _isTopologyDirty = true;
-    private bool _isDeformDirty = true;
+    private bool _topologyDirty = true;
+    private bool _deformDirty = true;
 
     private void OnEnable()
     {
         _target = (MergeTool)target;
+        _pairCache.Bind(_target);
         _previewMaterial = GetAsset<Material>("PreviewMaterial.mat");
         Undo.undoRedoPerformed += OnUndoRedo;
         MarkTopologyDirty();
@@ -62,7 +48,7 @@ public partial class MergeToolEditor : Editor
     private void OnDisable()
     {
         Undo.undoRedoPerformed -= OnUndoRedo;
-        ClearAllCaches();
+        ClearWorkspaces();
     }
 
     private void OnUndoRedo()
@@ -74,41 +60,122 @@ public partial class MergeToolEditor : Editor
 
     private void MarkTopologyDirty()
     {
-        _isTopologyDirty = true;
-        _isDeformDirty = true;
-        InvalidatePairCache();
+        _topologyDirty = true;
+        _deformDirty = true;
+        _pairCache.Invalidate();
     }
 
     private void MarkDeformDirty()
     {
-        _isDeformDirty = true;
+        _deformDirty = true;
     }
 
-    private void ClearAllCaches()
+    private void ClearWorkspaces()
     {
-        DestroyMeshDict(_cachedTopologyMeshes);
-        DestroyMeshDict(_cachedPreviewMeshes);
-        DestroyMeshDict(_cachedResultMeshes);
-        _cachedTopologyMeshes = null;
-        _cachedPreviewMeshes = null;
-        _cachedResultMeshes = null;
-        _splitDependencies = null;
-        _meshGraphs = null;
-        InvalidatePairCache();
+        _faceWorkspace = null;
+        _bodyWorkspace = null;
     }
 
-    private void DestroyMeshDict(Dictionary<SkinnedMeshRenderer, Mesh> dict)
+    private bool HasMeshesAssigned()
     {
-        if (dict != null)
+        return _target != null && _target.faceMesh != null && _target.bodyMesh != null;
+    }
+}
+
+internal class PairCache
+{
+    private MergeTool _target;
+    private bool _dirty = true;
+    private readonly List<VertexPair> _pairs = new List<VertexPair>();
+    private readonly List<int> _logIndices = new List<int>();
+
+    public IReadOnlyList<VertexPair> Pairs => _pairs;
+    public IReadOnlyList<int> LogIndices => _logIndices;
+
+    public void Bind(MergeTool target) { _target = target; Invalidate(); }
+    public void Invalidate() { _dirty = true; }
+
+    public void Refresh()
+    {
+        if (!_dirty || _target == null) return;
+        _pairs.Clear();
+        _logIndices.Clear();
+        if (_target.operationLog != null)
         {
-            foreach (var mesh in dict.Values) if (mesh != null) DestroyImmediate(mesh);
-            dict.Clear();
+            for (var i = 0; i < _target.operationLog.Count; i++)
+            {
+                var op = _target.operationLog[i];
+                if (op.kind != OperationKind.Pair) continue;
+                _pairs.Add(op.pair);
+                _logIndices.Add(i);
+            }
         }
+        _dirty = false;
     }
 
-    private void InvalidatePairCache()
+    public bool TryGet(int pairIndex, out VertexPair pair, out int logIndex)
     {
-        _pairCacheDirty = true;
+        pair = default;
+        logIndex = -1;
+        Refresh();
+        if (pairIndex < 0 || pairIndex >= _pairs.Count) return false;
+        pair = _pairs[pairIndex];
+        logIndex = _logIndices[pairIndex];
+        return true;
+    }
+
+    public int Find(int faceIndex, int bodyIndex, out int logIndex)
+    {
+        logIndex = -1;
+        Refresh();
+        for (var i = 0; i < _pairs.Count; i++)
+        {
+            var pair = _pairs[i];
+            if (pair.faceIndex == faceIndex && pair.bodyIndex == bodyIndex)
+            {
+                logIndex = _logIndices[i];
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    public int FindByLogIndex(int logIndex)
+    {
+        Refresh();
+        for (var i = 0; i < _logIndices.Count; i++)
+        {
+            if (_logIndices[i] == logIndex) return i;
+        }
+        return -1;
+    }
+}
+
+internal class SelectionState
+{
+    public int HoveredVertex = -1;
+    public Vector3 HoveredVertexPosition;
+    public int HoveredEdgeV1 = -1;
+    public int HoveredEdgeV2 = -1;
+    public int SelectedFaceIndex = -1;
+    public int SelectedPairIndex = -1;
+    public int ActiveHandleIndex = -1;
+    public bool HandleDragging;
+    public Vector3 HandlePosition;
+
+    public void ResetHover()
+    {
+        HoveredVertex = -1;
+        HoveredEdgeV1 = -1;
+        HoveredEdgeV2 = -1;
+    }
+
+    public void ResetSelection()
+    {
+        SelectedPairIndex = -1;
+        SelectedFaceIndex = -1;
+        ActiveHandleIndex = -1;
+        HandleDragging = false;
     }
 }
 #endif
