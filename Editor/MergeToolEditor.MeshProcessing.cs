@@ -6,15 +6,15 @@ using UnityEngine;
 
 public partial class MergeToolEditor
 {
-    private void UpdateMeshesIfDirty()
+    private void UpdateMeshesIfDirty(bool includeBlendShapes = true)
     {
         if (!HasMeshesAssigned()) return;
         if (!_topologyDirty && !_deformDirty && _faceWorkspace?.ResultMesh != null && _bodyWorkspace?.ResultMesh != null) return;
 
-        PrepareWorkspaces();
+        PrepareWorkspaces(includeBlendShapes);
         ApplyOperationsToWorkspaces();
         ApplyPairAlignment();
-        ApplyBlendShapes();
+        if (includeBlendShapes) ApplyBlendShapes();
         BuildGraphs();
         BakePreviews();
         SmoothNormals();
@@ -23,12 +23,14 @@ public partial class MergeToolEditor
         _deformDirty = false;
     }
 
-    private void PrepareWorkspaces()
+    private void PrepareWorkspaces(bool includeBlendShapes)
     {
         if (_faceWorkspace == null || _faceWorkspace.Renderer != _target.faceMesh)
             _faceWorkspace = new MeshWorkspace(_target.faceMesh);
         if (_bodyWorkspace == null || _bodyWorkspace.Renderer != _target.bodyMesh)
             _bodyWorkspace = new MeshWorkspace(_target.bodyMesh);
+        _faceWorkspace.EnableBlendShapes = includeBlendShapes;
+        _bodyWorkspace.EnableBlendShapes = includeBlendShapes;
         _faceWorkspace.PrepareSource();
         _bodyWorkspace.PrepareSource();
     }

@@ -39,6 +39,7 @@ public class MeshWorkspace : IMeshWorkspace
     public Matrix4x4 WorldToLocal { get; private set; }
     public Matrix4x4[] SkinToWorld { get; private set; }
     public Dictionary<int, List<int>> CoincidentGroups { get; private set; } = new Dictionary<int, List<int>>();
+    public bool EnableBlendShapes { get; set; } = true;
 
     private List<BlendShapeData> _capturedBlendShapes;
 
@@ -56,7 +57,7 @@ public class MeshWorkspace : IMeshWorkspace
         RefreshTransforms();
         WorkingMesh = CloneMesh(Renderer?.sharedMesh, "_Working");
         Dependencies.Clear();
-        _capturedBlendShapes = Renderer != null ? BlendShapeUtility.Capture(Renderer.sharedMesh) : new List<BlendShapeData>();
+        _capturedBlendShapes = EnableBlendShapes && Renderer != null ? BlendShapeUtility.Capture(Renderer.sharedMesh) : new List<BlendShapeData>();
         SkinToWorld = MeshSpace.BuildSkinToWorld(Renderer, WorkingMesh);
         CoincidentGroups = MeshSpace.BuildCoincidentMap(WorkingMesh?.vertices, LocalToWorld, SkinToWorld);
     }
@@ -73,9 +74,10 @@ public class MeshWorkspace : IMeshWorkspace
 
     public void ApplyBlendShapes(List<BlendShapeData> shapes)
     {
+        if (!EnableBlendShapes) return;
         if (WorkingMesh == null) return;
-        var data = shapes ?? _capturedBlendShapes;
-        BlendShapeUtility.Apply(WorkingMesh, data, Dependencies);
+        var data = shapes ?? _capturedBlendShapes ?? new List<BlendShapeData>();
+        if (data.Count > 0) BlendShapeUtility.Apply(WorkingMesh, data, Dependencies);
     }
 
     public void RebuildGraph()

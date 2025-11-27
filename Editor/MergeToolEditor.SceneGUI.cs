@@ -10,7 +10,7 @@ public partial class MergeToolEditor
         if (_target == null || _target.isApplied) return;
         if (!HasMeshesAssigned()) return;
 
-        UpdateMeshesIfDirty();
+        UpdateMeshesIfDirty(includeBlendShapes: false);
         _pairCache.Refresh();
         if (_selection.SelectedPairIndex >= _pairCache.Pairs.Count) _selection.SelectedPairIndex = -1;
 
