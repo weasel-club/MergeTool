@@ -95,8 +95,9 @@ public class MeshWorkspace : IMeshWorkspace
 
     public void ApplyNormals(Vector3[] normals)
     {
-        if (ResultMesh == null || normals == null) return;
-        ResultMesh.normals = normals;
+        if (normals == null) return;
+        if (WorkingMesh != null && normals.Length == WorkingMesh.vertexCount) WorkingMesh.normals = normals;
+        if (ResultMesh != null && normals.Length == ResultMesh.vertexCount) ResultMesh.normals = normals;
     }
 
     public Vector3[] GetNormals()

@@ -106,7 +106,7 @@ public partial class MergeToolEditor
     private void ApplyChangesToScene()
     {
         UpdateMeshesIfDirty();
-        if (_faceWorkspace?.ResultMesh == null && _bodyWorkspace?.ResultMesh == null) return;
+        if (_faceWorkspace?.WorkingMesh == null && _bodyWorkspace?.WorkingMesh == null) return;
         var folderPath = GetSaveFolderPath();
         if (string.IsNullOrEmpty(folderPath)) return;
 
@@ -128,9 +128,9 @@ public partial class MergeToolEditor
     {
         originalMesh = null;
         if (workspace == null || renderer == null) return null;
-        if (workspace.ResultMesh == null) return null;
+        if (workspace.WorkingMesh == null) return null;
 
-        var newMesh = UnityEngine.Object.Instantiate(workspace.ResultMesh);
+        var newMesh = UnityEngine.Object.Instantiate(workspace.WorkingMesh);
         newMesh.name = renderer.name + "_" + suffix;
         newMesh.RecalculateBounds();
         var fileName = $"{renderer.name}_{suffix}_{DateTime.Now.Ticks}.asset";
