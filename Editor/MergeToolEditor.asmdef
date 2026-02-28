@@ -1,0 +1,16 @@
+{
+    "name": "MergeToolEditor",
+    "rootNamespace": "",
+    "references": [
+        "GUID:63465e06c699b8f48abb1e76c84eaef9"
+    ],
+    "includePlatforms": [],
+    "excludePlatforms": [],
+    "allowUnsafeCode": false,
+    "overrideReferences": false,
+    "precompiledReferences": [],
+    "autoReferenced": false,
+    "defineConstraints": [],
+    "versionDefines": [],
+    "noEngineReferences": false
+}
