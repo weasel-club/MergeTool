@@ -1,0 +1,15 @@
+{
+  "name": "me.goorm.merge-tool",
+  "displayName": "Merge Tool",
+  "version": "0.0.4",
+  "url": "https://github.com/weasel-club/MergeTool",
+  "author": {
+    "name": "goorm",
+    "email": "cstria0106@gmail.com",
+    "url": "https://github.com/cstria0106"
+  },
+  "description": "Merge meshes and blendshapes",
+  "unity": "2019.4",
+  "dependencies": {},
+  "vpmDependencies ": {}
+}
