@@ -52,7 +52,10 @@ public struct OperationRecord
     public VertexPair pair;
 }
 
-public class MergeTool : MonoBehaviour, IEditorOnly, IMergeTarget
+public class MergeTool : MonoBehaviour, IMergeTarget
+#if MT_VRC_SDK
+, IEditorOnly
+#endif
 {
     [Header("Renderers")]
     public SkinnedMeshRenderer faceMesh;
