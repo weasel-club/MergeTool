@@ -106,16 +106,15 @@ public static class NormalSmoother
     public static void Smooth(IMeshWorkspace face, IMeshWorkspace body, IReadOnlyList<VertexPair> pairs, int depth, float strength)
     {
         if (face?.Graph == null || body?.Graph == null) return;
-        if (face.PreviewMesh == null || body.PreviewMesh == null) return;
+        if (face.WorkingMesh == null || body.WorkingMesh == null) return;
         if (pairs == null || pairs.Count == 0) return;
 
-        var faceNormals = face.PreviewMesh.normals;
-        var bodyNormals = body.PreviewMesh.normals;
-        var faceVerts = face.PreviewMesh.vertices;
-        var bodyVerts = body.PreviewMesh.vertices;
+        var faceNormals = face.WorkingMesh.normals;
+        var bodyNormals = body.WorkingMesh.normals;
+        if (faceNormals == null || bodyNormals == null) return;
 
-        var faceCoincident = MergeNeighbors.BuildCoincident(faceVerts);
-        var bodyCoincident = MergeNeighbors.BuildCoincident(bodyVerts);
+        var faceCoincident = face.CoincidentGroups ?? new Dictionary<int, List<int>>();
+        var bodyCoincident = body.CoincidentGroups ?? new Dictionary<int, List<int>>();
 
         var faceNeighbors = MergeNeighbors.Merge(face.Graph.vertexNeighbors, faceCoincident);
         var bodyNeighbors = MergeNeighbors.Merge(body.Graph.vertexNeighbors, bodyCoincident);
@@ -134,11 +133,11 @@ public static class NormalSmoother
         {
             var pair = pairs[i];
             if (pair.faceIndex >= faceNormals.Length || pair.bodyIndex >= bodyNormals.Length) continue;
-            var nFaceWorld = faceToWorld.MultiplyVector(faceNormals[pair.faceIndex]).normalized;
-            var nBodyWorld = bodyToWorld.MultiplyVector(bodyNormals[pair.bodyIndex]).normalized;
+            var nFaceWorld = MeshSpace.ConvertLocalVectorToWorld(faceNormals[pair.faceIndex], faceToWorld, face.SkinToWorld, pair.faceIndex).normalized;
+            var nBodyWorld = MeshSpace.ConvertLocalVectorToWorld(bodyNormals[pair.bodyIndex], bodyToWorld, body.SkinToWorld, pair.bodyIndex).normalized;
             var merged = (nFaceWorld + nBodyWorld).sqrMagnitude > 0f ? (nFaceWorld + nBodyWorld).normalized : nFaceWorld;
-            var faceLocal = worldToFace.MultiplyVector(merged).normalized;
-            var bodyLocal = worldToBody.MultiplyVector(merged).normalized;
+            var faceLocal = MeshSpace.ConvertWorldVectorToLocal(merged, worldToFace, face.SkinToWorld, pair.faceIndex).normalized;
+            var bodyLocal = MeshSpace.ConvertWorldVectorToLocal(merged, worldToBody, body.SkinToWorld, pair.bodyIndex).normalized;
             MergeNeighbors.AddSeed(faceSeeds, faceSeam, faceCoincident, pair.faceIndex, faceLocal);
             MergeNeighbors.AddSeed(bodySeeds, bodySeam, bodyCoincident, pair.bodyIndex, bodyLocal);
         }
@@ -149,8 +148,8 @@ public static class NormalSmoother
         MergeNeighbors.BlendNormals(faceNormals, faceSeam, faceNeighbors, faceWeights, strength);
         MergeNeighbors.BlendNormals(bodyNormals, bodySeam, bodyNeighbors, bodyWeights, strength);
 
-        face.PreviewMesh.normals = faceNormals;
-        body.PreviewMesh.normals = bodyNormals;
+        face.WorkingMesh.normals = faceNormals;
+        body.WorkingMesh.normals = bodyNormals;
     }
 }
 

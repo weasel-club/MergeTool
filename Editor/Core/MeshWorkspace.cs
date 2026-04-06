@@ -117,6 +117,14 @@ public class MeshWorkspace : IMeshWorkspace
         MeshSplitter.UpdateSplitVertices(WorkingMesh, Dependencies);
     }
 
+    public Mesh CreateAppliedMesh()
+    {
+        if (WorkingMesh == null) return null;
+        var applied = CloneMesh(WorkingMesh, "_Applied");
+        applied.RecalculateBounds();
+        return applied;
+    }
+
     private Mesh CloneMesh(Mesh mesh, string suffix)
     {
         if (mesh == null) return null;
@@ -212,6 +220,22 @@ public static class MeshSpace
             if (Mathf.Abs(skin.determinant) > 1e-8f) return skin.inverse.MultiplyPoint3x4(world);
         }
         return fallbackWorldToLocal.MultiplyPoint3x4(world);
+    }
+
+    public static Vector3 ConvertLocalVectorToWorld(Vector3 local, Matrix4x4 localToWorld, Matrix4x4[] skinToWorld, int index)
+    {
+        if (skinToWorld != null && index >= 0 && index < skinToWorld.Length) return skinToWorld[index].MultiplyVector(local);
+        return localToWorld.MultiplyVector(local);
+    }
+
+    public static Vector3 ConvertWorldVectorToLocal(Vector3 world, Matrix4x4 fallbackWorldToLocal, Matrix4x4[] skinToWorld, int index)
+    {
+        if (skinToWorld != null && index >= 0 && index < skinToWorld.Length)
+        {
+            var skin = skinToWorld[index];
+            if (Mathf.Abs(skin.determinant) > 1e-8f) return skin.inverse.MultiplyVector(world);
+        }
+        return fallbackWorldToLocal.MultiplyVector(world);
     }
 
     public static void Bake(SkinnedMeshRenderer renderer, Mesh source)

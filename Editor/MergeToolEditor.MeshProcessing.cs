@@ -6,18 +6,18 @@ using UnityEngine;
 
 public partial class MergeToolEditor
 {
-    private void UpdateMeshesIfDirty(bool includeBlendShapes = true)
+    private void UpdateMeshesIfDirty(bool includeBlendShapes = true, bool force = false)
     {
         if (!HasMeshesAssigned()) return;
-        if (!_topologyDirty && !_deformDirty && _faceWorkspace?.ResultMesh != null && _bodyWorkspace?.ResultMesh != null) return;
+        if (!force && !_topologyDirty && !_deformDirty && _faceWorkspace?.ResultMesh != null && _bodyWorkspace?.ResultMesh != null) return;
 
         PrepareWorkspaces(includeBlendShapes);
         ApplyOperationsToWorkspaces();
         ApplyPairAlignment();
         if (includeBlendShapes) ApplyBlendShapes();
         BuildGraphs();
-        BakePreviews();
         SmoothNormals();
+        BakePreviews();
 
         _topologyDirty = false;
         _deformDirty = false;
@@ -99,14 +99,12 @@ public partial class MergeToolEditor
     private void SmoothNormals()
     {
         NormalSmoother.Smooth(_faceWorkspace, _bodyWorkspace, _pairCache.Pairs, _target.normalSmoothDepth, _target.normalSmoothStrength);
-        _faceWorkspace.ApplyNormals(_faceWorkspace.PreviewMesh?.normals);
-        _bodyWorkspace.ApplyNormals(_bodyWorkspace.PreviewMesh?.normals);
     }
 
     private void ApplyChangesToScene()
     {
-        UpdateMeshesIfDirty();
-        if (_faceWorkspace?.ResultMesh == null && _bodyWorkspace?.ResultMesh == null) return;
+        UpdateMeshesIfDirty(includeBlendShapes: true, force: true);
+        if (_faceWorkspace?.WorkingMesh == null && _bodyWorkspace?.WorkingMesh == null) return;
         var folderPath = GetSaveFolderPath();
         if (string.IsNullOrEmpty(folderPath)) return;
 
@@ -128,9 +126,10 @@ public partial class MergeToolEditor
     {
         originalMesh = null;
         if (workspace == null || renderer == null) return null;
-        if (workspace.ResultMesh == null) return null;
+        var newMesh = workspace.CreateAppliedMesh();
+        if (newMesh == null) return null;
 
-        var newMesh = UnityEngine.Object.Instantiate(workspace.ResultMesh);
+        // Apply the skinned working mesh, not the baked preview snapshot.
         newMesh.name = renderer.name + "_" + suffix;
         newMesh.RecalculateBounds();
         var fileName = $"{renderer.name}_{suffix}_{DateTime.Now.Ticks}.asset";
