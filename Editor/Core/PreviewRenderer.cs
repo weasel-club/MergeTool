@@ -111,7 +111,10 @@ public class PreviewRenderer : IDisposable
             var mr = clone.AddComponent<MeshRenderer>();
             var mat = new Material(_sourceMaterial);
             ConfigureMaterial(mat, entry.alpha, entry.wireframe);
-            mr.sharedMaterial = mat;
+            var subMeshCount = Mathf.Max(1, entry.mesh.subMeshCount);
+            var materials = new Material[subMeshCount];
+            for (var i = 0; i < subMeshCount; i++) materials[i] = mat;
+            mr.sharedMaterials = materials;
             _materials.Add(mat);
         }
     }
