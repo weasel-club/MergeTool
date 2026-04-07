@@ -55,6 +55,7 @@ public static class PairAligner
 
         context.FaceWorkspace.SetVertices(context.FaceVertices);
         context.BodyWorkspace.SetVertices(context.BodyVertices);
+        CopyBodyWeightsToFaceSeam(context, pairs);
     }
 
     private static void ApplyMidpoint(Vector3[] vertices, int index, Dictionary<int, List<int>> groups, Matrix4x4 worldToLocal, Matrix4x4[] skinToWorld, Vector3 midpoint)
@@ -71,6 +72,103 @@ public static class PairAligner
         {
             vertices[index] = MeshSpace.ConvertWorldToLocal(midpoint, worldToLocal, skinToWorld, index);
         }
+    }
+
+    private static void CopyBodyWeightsToFaceSeam(PairContext context, IReadOnlyList<VertexPair> pairs)
+    {
+        var faceMesh = context.FaceWorkspace?.WorkingMesh;
+        var bodyMesh = context.BodyWorkspace?.WorkingMesh;
+        var faceRenderer = context.FaceWorkspace?.Renderer;
+        var bodyRenderer = context.BodyWorkspace?.Renderer;
+        if (faceMesh == null || bodyMesh == null || faceRenderer == null || bodyRenderer == null) return;
+
+        var faceWeights = faceMesh.boneWeights;
+        var bodyWeights = bodyMesh.boneWeights;
+        if (faceWeights == null || bodyWeights == null) return;
+        if (faceWeights.Length != faceMesh.vertexCount || bodyWeights.Length != bodyMesh.vertexCount) return;
+
+        var faceBoneLookup = BuildBoneLookup(faceRenderer.bones);
+        var bodyBones = bodyRenderer.bones;
+
+        var changed = false;
+        for (var i = 0; i < pairs.Count; i++)
+        {
+            var pair = pairs[i];
+            if (pair.faceIndex < 0 || pair.faceIndex >= faceWeights.Length) continue;
+            if (pair.bodyIndex < 0 || pair.bodyIndex >= bodyWeights.Length) continue;
+
+            var sourceWeight = RemapBoneWeight(bodyWeights[pair.bodyIndex], bodyBones, faceBoneLookup, faceWeights[pair.faceIndex]);
+            if (context.FaceGroups != null && context.FaceGroups.TryGetValue(pair.faceIndex, out var linked))
+            {
+                for (var j = 0; j < linked.Count; j++)
+                {
+                    var idx = linked[j];
+                    if (idx < 0 || idx >= faceWeights.Length) continue;
+                    faceWeights[idx] = sourceWeight;
+                    changed = true;
+                }
+            }
+            else
+            {
+                faceWeights[pair.faceIndex] = sourceWeight;
+                changed = true;
+            }
+        }
+
+        if (changed) context.FaceWorkspace.SetBoneWeights(faceWeights);
+    }
+
+    private static Dictionary<Transform, int> BuildBoneLookup(Transform[] bones)
+    {
+        var lookup = new Dictionary<Transform, int>();
+        if (bones == null) return lookup;
+        for (var i = 0; i < bones.Length; i++)
+        {
+            var bone = bones[i];
+            if (bone == null || lookup.ContainsKey(bone)) continue;
+            lookup[bone] = i;
+        }
+        return lookup;
+    }
+
+    private static BoneWeight RemapBoneWeight(BoneWeight source, Transform[] bodyBones, Dictionary<Transform, int> faceBoneLookup, BoneWeight fallback)
+    {
+        var weights = new Dictionary<int, float>();
+        AccumulateRemappedWeight(weights, source.boneIndex0, source.weight0, bodyBones, faceBoneLookup);
+        AccumulateRemappedWeight(weights, source.boneIndex1, source.weight1, bodyBones, faceBoneLookup);
+        AccumulateRemappedWeight(weights, source.boneIndex2, source.weight2, bodyBones, faceBoneLookup);
+        AccumulateRemappedWeight(weights, source.boneIndex3, source.weight3, bodyBones, faceBoneLookup);
+        if (weights.Count == 0) return fallback;
+
+        var ordered = new List<KeyValuePair<int, float>>(weights);
+        ordered.Sort((a, b) => b.Value.CompareTo(a.Value));
+        if (ordered.Count > 4) ordered.RemoveRange(4, ordered.Count - 4);
+
+        var total = 0f;
+        for (var i = 0; i < ordered.Count; i++) total += ordered[i].Value;
+        if (total <= 0f) return fallback;
+
+        var remapped = new BoneWeight();
+        for (var i = 0; i < ordered.Count; i++)
+        {
+            var normalized = ordered[i].Value / total;
+            if (i == 0) { remapped.boneIndex0 = ordered[i].Key; remapped.weight0 = normalized; }
+            else if (i == 1) { remapped.boneIndex1 = ordered[i].Key; remapped.weight1 = normalized; }
+            else if (i == 2) { remapped.boneIndex2 = ordered[i].Key; remapped.weight2 = normalized; }
+            else if (i == 3) { remapped.boneIndex3 = ordered[i].Key; remapped.weight3 = normalized; }
+        }
+        return remapped;
+    }
+
+    private static void AccumulateRemappedWeight(Dictionary<int, float> weights, int boneIndex, float weight, Transform[] bodyBones, Dictionary<Transform, int> faceBoneLookup)
+    {
+        if (weight <= 0f || bodyBones == null || faceBoneLookup == null) return;
+        if (boneIndex < 0 || boneIndex >= bodyBones.Length) return;
+        var bone = bodyBones[boneIndex];
+        if (bone == null) return;
+        if (!faceBoneLookup.TryGetValue(bone, out var faceIndex)) return;
+        if (weights.TryGetValue(faceIndex, out var existing)) weights[faceIndex] = existing + weight;
+        else weights[faceIndex] = weight;
     }
 }
 

@@ -117,6 +117,15 @@ public class MeshWorkspace : IMeshWorkspace
         MeshSplitter.UpdateSplitVertices(WorkingMesh, Dependencies);
     }
 
+    public void SetBoneWeights(BoneWeight[] boneWeights)
+    {
+        if (WorkingMesh == null || boneWeights == null) return;
+        if (boneWeights.Length != WorkingMesh.vertexCount) return;
+        WorkingMesh.boneWeights = boneWeights;
+        SkinToWorld = MeshSpace.BuildSkinToWorld(Renderer, WorkingMesh);
+        CoincidentGroups = MeshSpace.BuildCoincidentMap(WorkingMesh.vertices, LocalToWorld, SkinToWorld);
+    }
+
     public Mesh CreateAppliedMesh()
     {
         if (WorkingMesh == null) return null;
